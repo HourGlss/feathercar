@@ -4,8 +4,9 @@ import board
 import time
 import busio
 from digitalio import DigitalInOut
+from adafruit_mcp2515.canio import Message, RemoteTransmissionRequest
 from adafruit_mcp2515 import MCP2515 as CAN
-from canmessage.canmessage import CanMessage
+from canmessage import CanMessage
 
 cs = DigitalInOut(board.CAN_CS)
 cs.switch_to_output()
@@ -66,14 +67,31 @@ class PwmIn:
                 self.current_value = self.normalize_value(pulse_data)
                 scale = math.floor(self.current_value / 10)
                 self.current_value = scale * 10
-                if self.last_value != self.current_value:
-                    self.last_value = self.current_value
+
+                if self.name == "steering":
+                    # fucking steering
+                    failure = False
+                    if self.last_value == 0 and self.current_value == 100:
+                        self.current_value = 0
+                        failure = True
+
+                    if self.last_value == -100 and self.current_value == 100:
+                        self.current_value = -100
+                        failure = True
+
+                    if not failure:
+                        if self.last_value != self.current_value:
+                            self.last_value = self.current_value
+                else:
+
+                    if self.last_value != self.current_value:
+                        self.last_value = self.current_value
 
         self.pulse_in.clear()
         self.pulse_in.resume(80)
 
 
-steering = PwmIn("steering", board.D13,950,1850)
+steering = PwmIn("steering", board.D12,950,1850)
 throttle = PwmIn("throttle", board.D25,970,1850)
 can_bus = CAN(spi, cs,baudrate=1000000)
 cm = CanMessage()
@@ -83,4 +101,5 @@ while True:
     with can_bus.listen() as listener:
         steering.get_pulse_data()
         throttle.get_pulse_data()
-        print(steering.current_value,throttle.current_value)
+        if steering.current_value is not None and throttle.current_value is not None:
+            print(f"{steering.current_value:>4}{throttle.current_value:>4}")
