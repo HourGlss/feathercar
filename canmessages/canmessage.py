@@ -1,37 +1,66 @@
+import struct
+from icd import icd
+
+
 class CanMessage:
     id: int
-    count: int
+    data: bytes
+    parsed_data: dict[str:int]
+    device: int
 
-    def __init__(self):
+    def __init__(self, dev):
         self.id = 0x001
-        self.data = b'adafrui'
-        self.count = 65
+        self.data = b''
+        self.device = dev
 
-    def next(self):
-        self.data = b'adafrui'
-        self.data = int.from_bytes(self.data, 'big') << 8
-        self.data |= self.count
-        if self.count == 90:
-            self.count = 65
-            self.id += 1
-        else:
-            self.count += 1
-        self.data = self.data.to_bytes(8, 'big')
+    def encode_data(self, msg_number: int, **kwargs):
+        assert 0 <= msg_number <= 255
+        if self.device == 1:
+            if msg_number == 1:
+                assert 'steering' in kwargs.keys()
+                assert 'throttle' in kwargs.keys()
+                num1 = self.device
+                num2 = msg_number
+                num3 = kwargs['steering']
+                assert -100 <= num3 <= 100
+                num4 = kwargs['throttle']
+                assert -100 <= num4 <= 100
 
-    def reset(self):
-        self.data = b'adafrui'
+                # Define the struct format string
+                struct_format = f"B B {icd[self.device]['messages'][msg_number]['struct_string']}"
+                # Pack the numbers into a byte string
+                packed_data = struct.pack(struct_format, num1, num2, num3, num4)
+                self.data = packed_data
+                return True
+        return False
 
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return f"id: {self.id}, data:{self.data} count:{self.count}"
+    def decode_data(self):
+        from_device = int(struct.unpack('B', self.data[0:1])[0])
+        msg_number = int(struct.unpack('B', self.data[1:2])[0])
+        if from_device == 1:
+            if msg_number == 1:
+                from_device, msg_number, *the_rest = struct.unpack(
+                    f"B B {icd[from_device]['messages'][msg_number]['struct_string']}", self.data)
+                parsed_data = dict()
+                i = 0
+                for item in icd[from_device]['messages'][msg_number]['keywords']:
+                    parsed_data[item] = the_rest[i]
+                    i += 1
+                parsed_data['from'] = from_device
+                parsed_data['msg_number'] = msg_number
+                self.parsed_data = parsed_data
+                return True
+        return False
 
 
 if __name__ == "__main__":
-    a = CanMessage()
-    print(a)
-    for i in range(100):
-        a.next()
-        print(a)
-        a.reset()
+    pass
+    # from_device = 1
+    # msg_number = 1
+    # steering = -100
+    # throttle = 100
+    # cm = CanMessage(from_device)
+    # cb = CanMessage(8)
+    # cm.encode_data(msg_number, steering=steering, throttle=throttle)
+    # cb.data = cm.data
+    # cb.decode_data()
