@@ -21,16 +21,16 @@ except:
         print("Can lib not found")
 from icd import icd
 
-import pulseio
-pwm = pulseio.PWMOut(board.D5, frequency=38000, duty_cycle=32768)
-pulse = pulseio.PulseOut(pwm)
+import pwmio
+pwm = pwmio.PWMOut(board.D5, frequency=5000, duty_cycle=20000)
 
 print("imports are good")
 STEERING_MIN = 950  # Minimum pulse width for full left position
 STEERING_MAX = 1850  # Maximum pulse width for full right position
 
 def set_servo_angle(angle):
-    pulse_width = int(SERVO_MIN + ((angle + 100) / 200) * (SERVO_MAX - SERVO_MIN))
+    print(angle)
+    pulse_width = int(STEERING_MIN + ((angle + 100) / 200) * (STEERING_MAX - STEERING_MIN))
     pwm.duty_cycle = pulse_width
 
 class CANBus:
