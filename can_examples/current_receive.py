@@ -1,6 +1,7 @@
 import board
 from lcd.lcd import LCD
 from lcd.i2c_pcf8574_interface import I2CPCF8574Interface
+from lcd.lcd import CursorMode
 import time
 import digitalio
 import busio
@@ -26,6 +27,7 @@ class LargeLcd:
     current_pos = 0
 
     def __init__(self):
+
         try:
             self.i2c = board.I2C()
         except RuntimeError:

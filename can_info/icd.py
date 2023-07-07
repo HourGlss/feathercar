@@ -1,12 +1,12 @@
 icd = {
-    1: {
+    1: {  # DEVICE
         "name": "Manual control",
         "description": "Puts information from controller onto bus",
         "messages": {
-            1: {
-                "struct_string": "b b",
+            1: {  # MSG NUMBER
+                "struct_string": "bb",
                 "keywords": ["steering", "throttle"],
-                "id": 0x001
+                "id": 0x010  # CAN BUS ID
             }
         }
     }

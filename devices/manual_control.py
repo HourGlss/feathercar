@@ -1,16 +1,30 @@
+from __future__ import annotations
+
+#
+# THIS IS DEVICE 1
+#
+DEVICE = 1
 import math
 import pulseio
 import board
 import time
 import busio
 from digitalio import DigitalInOut
-from adafruit_mcp2515.canio import Message, RemoteTransmissionRequest
+
 from adafruit_mcp2515 import MCP2515 as CAN
-from canmessage import CanMessage
+
+try:
+    from canmessage import CanMessage
+except:
+    try:
+        from can_info.canmessage import CanMessage
+    except:
+        print("Can lib not found")
 
 cs = DigitalInOut(board.CAN_CS)
 cs.switch_to_output()
 spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
+
 
 class PwmIn:
     min_val: int
@@ -20,7 +34,7 @@ class PwmIn:
     pulse_in: pulseio.PulseIn
     name: str
 
-    def __init__(self, name, pin,min_to_use,max_to_use):
+    def __init__(self, name, pin, min_to_use, max_to_use):
         self.current_time_us = time.monotonic_ns()
         self.min_val = min_to_use
         self.max_val = max_to_use
@@ -48,7 +62,7 @@ class PwmIn:
         if normed_value < -100:
             return -100
 
-        return round(normed_value)
+        return int(round(normed_value))
 
     def get_pulse_data(self):
         while len(self.pulse_in) == 0:
@@ -91,15 +105,15 @@ class PwmIn:
         self.pulse_in.resume(80)
 
 
-steering = PwmIn("steering", board.D12,950,1850)
-throttle = PwmIn("throttle", board.D25,970,1850)
-can_bus = CAN(spi, cs,baudrate=1000000)
-cm = CanMessage()
-cm.next()
-cm.reset()
+steering = PwmIn("steering", board.D12, 950, 1850)
+throttle = PwmIn("throttle", board.D25, 970, 1850)
+can_bus = CAN(spi, cs, baudrate=1000000)
+
 while True:
-    with can_bus.listen() as listener:
-        steering.get_pulse_data()
-        throttle.get_pulse_data()
-        if steering.current_value is not None and throttle.current_value is not None:
-            print(f"{steering.current_value:>4}{throttle.current_value:>4}")
+
+    steering.get_pulse_data()
+    throttle.get_pulse_data()
+    if steering.current_value is not None and throttle.current_value is not None:
+        cm = CanMessage(DEVICE)
+        cm.encode_data(1, steering=steering.current_value, throttle=throttle.current_value)
+        can_bus.send(cm)
