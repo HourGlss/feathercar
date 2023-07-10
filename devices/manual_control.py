@@ -11,15 +11,9 @@ import time
 import busio
 from digitalio import DigitalInOut
 
-from adafruit_mcp2515 import MCP2515 as CAN
 
-try:
-    from canmessage import CanMessage
-except:
-    try:
-        from can_info.canmessage import CanMessage
-    except:
-        print("Can lib not found")
+
+
 
 cs = DigitalInOut(board.CAN_CS)
 cs.switch_to_output()
@@ -116,4 +110,4 @@ while True:
     if steering.current_value is not None and throttle.current_value is not None:
         cm = CanMessage(DEVICE)
         cm.encode_data(1, steering=steering.current_value, throttle=throttle.current_value)
-        can_bus.send(cm)
+        can_bus.send(cm.msg)

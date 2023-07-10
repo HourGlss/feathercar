@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import board
 import sys
+
 #
 # THIS IS DEVICE 2
 #
@@ -11,6 +12,7 @@ import time
 import busio
 import digitalio
 from adafruit_mcp2515 import MCP2515 as CAN
+
 # CAN MESSAGE AND ICD IMPORTS
 try:
     from canmessage import CanMessage
@@ -19,19 +21,21 @@ except:
         from can_info.canmessage import CanMessage
     except:
         print("Can lib not found")
-from icd import icd
 
 import pwmio
-pwm = pwmio.PWMOut(board.D5, frequency=5000, duty_cycle=20000)
+
+pwm = pwmio.PWMOut(board.D5)
 
 print("imports are good")
 STEERING_MIN = 950  # Minimum pulse width for full left position
 STEERING_MAX = 1850  # Maximum pulse width for full right position
 
+
 def set_servo_angle(angle):
-    print(angle)
     pulse_width = int(STEERING_MIN + ((angle + 100) / 200) * (STEERING_MAX - STEERING_MIN))
+    print(pulse_width)
     pwm.duty_cycle = pulse_width
+
 
 class CANBus:
     mcp: None | CAN

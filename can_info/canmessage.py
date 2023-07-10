@@ -43,6 +43,24 @@ class CanMessage:
                 self.data = packed_data
                 self.msg = Message(icd[self.device]['messages'][msg_number]['id'], self.data)
                 return True
+        if self.device == 8:
+            if msg_number == 1:
+                assert 'number' in kwargs.keys()
+                num1 = self.device
+                num2 = msg_number
+                num3 = kwargs['number']
+                assert -128 <= num3 <= 127
+
+
+                # Define the struct format string
+                specific = icd[self.device]['messages'][msg_number]['struct_string']
+
+                struct_format = f"BB{specific}"
+                # Pack the numbers into a byte string
+                packed_data = struct.pack(struct_format, num1, num2, num3)
+                self.data = packed_data
+                self.msg = Message(icd[self.device]['messages'][msg_number]['id'], self.data,extended=False)
+                return True
         return False
 
     def decode_data(self):
