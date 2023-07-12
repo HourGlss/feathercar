@@ -1,61 +1,50 @@
-import pulseio
-import board
-import math
-
-min_val = 2000
-max_val = -1
-received_values = 0
-steering = pulseio.PulseIn(board.D24)
-calibrated = False
 
 
-def normalize_value(value):
-    left = (100 + 100)
-    top = value - min_val
-    bottom = max_val - min_val
-    data = top/bottom
-    data *= left
-    data = data - 100
-    if data > 100:
-        return 100
-    if data < -100:
-        return -100
-    return round(data)
+# board.SCK, board.MOSI, board.MISO)
 
 
-print("keep stick neutral")
-while True:
-    # Wait for an active pulse
-    while len(steering) == 0:
-        pass
-    # Pause while we do something with the pulses
-    steering.pause()
+# sd = sdcardio.SDCard(otherspi, board.D5)
+# vfs = storage.VfsFat(sd)
+# storage.mount(vfs, '/sd')
+# print("sdcardio init passed")
 
-    # Print the pulses. pulses[0] is an active pulse unless the length
-    # reached max length and idle pulses are recorded.
-    data = None
+
+#
+# THIS IS DEVICE 3
+#
+DEVICE = 8
+from adafruit_mcp2515 import MCP2515 as CAN
+
+# CAN MESSAGE AND ICD IMPORTS
+try:
+    from canmessage import CanMessage
+except:
     try:
-        data = steering[0]
-        if data < 10000:
-            received_values += 1
-            if not calibrated:
-                if data < min_val:
-                    min_val = data
-                if data > max_val:
-                    max_val = data
-                if received_values == 200:
-                    print("ALL LEFT")
-                if received_values == 400:
-                    print("ALL RIGHT")
+        from can_info.canmessage import CanMessage
     except:
-        pass
-    if received_values > 600:
-        calibrated = True
-    if calibrated:
-        print(normalize_value(data))
+        print("Can lib not found")
+class CANBus:
+    mcp: None | CAN
 
-    # Clear the rest
-    steering.clear()
+    def __init__(self):
+        cs = digitalio.DigitalInOut(board.CAN_CS)  # gpio19 tx0 ??
+        cs.switch_to_output()
+        spi = busio.SPI(board.SCK, board.MOSI, board.MISO)  # gpio14, gpio15, gpio8 sck1 tx1 rx1
+        self.mcp = None
+        try:
+            self.mcp = CAN(spi, cs, baudrate=1000000)
+        except:
+            print("CAN BUS CANNOT BE MADE")
 
-    # Resume with an 80 microsecond active pulse
-    steering.resume(80)
+
+can_bus = CANBus()
+
+while True:
+    cm = CanMessage(DEVICE)
+    if cm.encode_data(1, number=7):
+        print("can msg build worked")
+    else:
+        print("encode data failed")
+    can_bus.mcp.send(cm.msg)
+    break
+print("msg sent")

@@ -24,17 +24,36 @@ except:
 
 import pwmio
 
-pwm = pwmio.PWMOut(board.D5)
-
-print("imports are good")
-STEERING_MIN = 950  # Minimum pulse width for full left position
-STEERING_MAX = 1850  # Maximum pulse width for full right position
+steering_pwm = pwmio.PWMOut(board.D5, frequency=50)
+throttle_pwm = pwmio.PWMOut(board.D25, frequency=50)
 
 
-def set_servo_angle(angle):
-    pulse_width = int(STEERING_MIN + ((angle + 100) / 200) * (STEERING_MAX - STEERING_MIN))
-    print(pulse_width)
-    pwm.duty_cycle = pulse_width
+def normalize(value, type_of_movement):
+    bounds = {"steering": {
+        "desired": {
+            "lower": 4000,
+            "upper": 6000
+        },
+        "actual": {
+            "lower": -100,
+            "upper": 100
+        }
+    },
+        "throttle":
+            {
+                "desired": {
+                    "lower": 3000,
+                    "upper": 7000
+                },
+                "actual": {
+                    "lower": -100,
+                    "upper": 100
+                }
+            }
+    }
+
+    return int(bounds[type_of_movement]['desired']['lower'] + (value - bounds[type_of_movement]['actual']['lower']) * (bounds[type_of_movement]['desired']['upper'] - bounds[type_of_movement]['desired']['lower']) / (bounds[type_of_movement]['actual']['upper'] - bounds[type_of_movement]['actual']['lower']))
+
 
 
 class CANBus:
@@ -51,35 +70,25 @@ class CANBus:
             print("CAN BUS CANNOT BE MADE")
 
 
-print("class creation is good")
-
 can = CANBus()
-
-print("class instantiation is done")
-# steering_value = 0
-# throttle_value = 0
-# while True:
-#     with can.mcp.listen(timeout=1.0) as listener:
-#         message_count = listener.in_waiting()
-#
-#         next_message = listener.receive()
-#         while not next_message is None:
-#             # print(next_message.data)
-#             cm = CanMessage(DEVICE, next_message)
-#             if cm.decode_data():
-#                 # print(cm.msg.data)
-#                 steering_value = cm.parsed_data['steering']
-#                 throttle_value = cm.parsed_data['throttle']
-#                 # print(steering_value, throttle_value)
-#             else:
-#                 print("decode failure")
-#                 sys.exit()
-#             next_message = listener.receive()
+steering_value = 0
+throttle_value = 0
 while True:
-    # Move the servo to the left
-    set_servo_angle(-100)  # -100 corresponds to full left position
-    time.sleep(1)  # Wait for 1 second
+    with can.mcp.listen(timeout=1.0) as listener:
+        message_count = listener.in_waiting()
 
-    # Move the servo to the right
-    set_servo_angle(100)  # 100 corresponds to full right position
-    time.sleep(1)  # Wait for 1 second
+        next_message = listener.receive()
+        while not next_message is None:
+            # print(next_message.data)
+            cm = CanMessage(DEVICE, next_message)
+            if cm.decode_data():
+                # print(cm.msg.data)
+                steering_value = cm.parsed_data['steering']
+                throttle_value = cm.parsed_data['throttle']
+                throttle_value *= -1
+                steering_pwm.duty_cycle = normalize(steering_value,"steering")
+                throttle_pwm.duty_cycle = normalize(throttle_value, "throttle")
+            else:
+                print("decode failure")
+                sys.exit()
+            next_message = listener.receive()

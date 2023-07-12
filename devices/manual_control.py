@@ -11,13 +11,17 @@ import time
 import busio
 from digitalio import DigitalInOut
 
+from adafruit_mcp2515 import MCP2515 as CAN
+
+try:
+    from canmessage import CanMessage
+except:
+    try:
+        from can_info.canmessage import CanMessage
+    except:
+        print("Can lib not found")
 
 
-
-
-cs = DigitalInOut(board.CAN_CS)
-cs.switch_to_output()
-spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
 
 
 class PwmIn:
@@ -98,7 +102,9 @@ class PwmIn:
         self.pulse_in.clear()
         self.pulse_in.resume(80)
 
-
+cs = DigitalInOut(board.CAN_CS)
+cs.switch_to_output()
+spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
 steering = PwmIn("steering", board.D12, 950, 1850)
 throttle = PwmIn("throttle", board.D25, 970, 1850)
 can_bus = CAN(spi, cs, baudrate=1000000)
@@ -108,6 +114,7 @@ while True:
     steering.get_pulse_data()
     throttle.get_pulse_data()
     if steering.current_value is not None and throttle.current_value is not None:
+        # print(f"SEND {steering.current_value:>4}{throttle.current_value:>4}")
         cm = CanMessage(DEVICE)
         cm.encode_data(1, steering=steering.current_value, throttle=throttle.current_value)
         can_bus.send(cm.msg)
