@@ -11,6 +11,8 @@ import os
 import time
 import busio
 import digitalio
+import storage
+import sdcardio
 from adafruit_mcp2515 import MCP2515 as CAN
 
 # CAN MESSAGE AND ICD IMPORTS
@@ -29,7 +31,7 @@ class CANBus:
     def __init__(self):
         cs = digitalio.DigitalInOut(board.CAN_CS)
         cs.switch_to_output()
-        spi = busio.SPI(board.SCK1, board.MOSI1, board.MISO1)
+        spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
         self.mcp = None
         try:
             self.mcp = CAN(spi, cs, baudrate=1000000)
@@ -37,9 +39,10 @@ class CANBus:
             print("CAN BUS CANNOT BE MADE")
 
 
-othercs = digitalio.DigitalInOut(board.CS0)
-othercs.switch_to_output()
-otherspi = busio.SPI(board.SCK0, board.MOSI0, board.MISO0)
+spi = busio.SPI(board.D6, board.SCL, board.TX)
+sdcard = sdcardio.SDCard(spi, board.D5)
+vfs = storage.VfsFat(sdcard)
+storage.mount(vfs, "/sd")
 can = CANBus()
 print("worked")
 while True:

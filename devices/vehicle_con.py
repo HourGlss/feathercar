@@ -56,25 +56,14 @@ def normalize(value, type_of_movement):
 
 
 
-class CANBus:
-    mcp: None | CAN
 
-    def __init__(self):
-        cs = digitalio.DigitalInOut(board.CAN_CS)
-        cs.switch_to_output()
-        spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-        self.mcp = None
-        try:
-            self.mcp = CAN(spi, cs, baudrate=1000000)
-        except:
-            print("CAN BUS CANNOT BE MADE")
 
 
 can = CANBus()
 steering_value = 0
 throttle_value = 0
 while True:
-    with can.mcp.listen(timeout=1.0) as listener:
+    with can.mcp.listen(timeout=.001) as listener:
         message_count = listener.in_waiting()
 
         next_message = listener.receive()
