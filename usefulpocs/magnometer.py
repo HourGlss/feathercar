@@ -178,7 +178,7 @@ class HMC5883L:
     def get_compass(self):
         self._set_single_measurement_mode()
         time.sleep(0.067)
-        heading = math.atan2(self.y(), self.x())
+        heading = math.atan2(self.y()/self.gain, self.x()/self.gain)
         heading += self.declination
         if heading < 0:
             heading += 2 * math.pi
