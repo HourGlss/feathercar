@@ -1,7 +1,7 @@
 import board
 import busio
 import digitalio
-
+import os
 
 # For most CircuitPython boards:
 # For QT Py M0:
