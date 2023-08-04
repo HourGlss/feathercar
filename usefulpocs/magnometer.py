@@ -12,6 +12,8 @@ import math
 
 
 class HMC5883L:
+    gain_config = [1370, 1090, 820, 660, 440, 390, 330, 230]
+    dig_res_per_gain = [.73, .92, 1.22, 1.52, 2.27, 2.56, 3.03, 4.35]
     register_info = [
         (0x00, "Configuration Register A", "rw"),
         (0x01, "Configuration Register B", "rw"),
@@ -29,7 +31,7 @@ class HMC5883L:
     ]
     device_address: int
     i2c: busio.I2C
-    gain: int
+    gain: int 
     declination: float
 
     def __init__(self, i2c, device_address, gain=None, declination=0.0):
@@ -111,10 +113,10 @@ class HMC5883L:
         return self.gain << 5
 
     def _get_low_high_self_test(self):
-        gain_config = [1370, 1090, 820, 660, 440, 390, 330, 230]
+
         low = 243
         high = 575
-        return int(low * (gain_config[self.gain] / 390)), int(high * (gain_config[self.gain] / 390))
+        return int(low * (self.gain_config[self.gain] / 390)), int(high * (self.gain_config[self.gain] / 390))
 
     def _single_self_test(self):
         # Step 1: Write CRA (00) - send 0x3C 0x00 0x71 (8-average, 15 Hz default, positive self-test measurement)
@@ -178,7 +180,7 @@ class HMC5883L:
     def get_compass(self):
         self._set_single_measurement_mode()
         time.sleep(0.067)
-        heading = math.atan2(self.y()/self.gain, self.x()/self.gain)
+        heading = math.atan2(self.y() / self.gain_config[self.gain], self.x() / self.gain_config[self.gain])
         heading += self.declination
         if heading < 0:
             heading += 2 * math.pi
