@@ -40,8 +40,8 @@ class Mitm:
 
 
 from_lidar = Mitm(busio.UART(
-    tx=board.GP4,
-    rx=board.GP5,
+    tx=board.GP8,
+    rx=board.GP9,
     baudrate=115200,
     bits=8,
     parity=busio.UART.Parity.ODD,

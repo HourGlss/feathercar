@@ -1,38 +1,51 @@
-# SPDX-FileCopyrightText: 2021 ladyada for Adafruit Industries
-#
-# SPDX-License-Identifier: MIT
-
-from math import floor
-from adafruit_rplidar import RPLidar
-import busio
 import board
-from digitalio import DigitalInOut, Direction, Pull
+import busio
 
-# Set up Motor Control GPIO
-motor_control = DigitalInOut(board.D12)
-motor_control.direction = Direction.OUTPUT
+usb_cmds = [b"\xA5\x52\xA5\x50",
+    b"\xA5\x50",
+    b"\xA5\x84\x06\x71\x00\x00\x00\x02\x00\x54",
+    b"\xA5\x84\x06\x74\x00\x00\x00\x02\x00\x51",
+    b"\xA5\x84\x06\x75\x00\x00\x00\x02\x00\x50",
+    b"\xA5\x84\x06\x7F\x00\x00\x00\x02\x00\x5A",
+    b"\xA5\x79",
+    b"\xA5\x82\x05\x02\x00\x00\x00\x00\x20"]
 
-# Set up UART
-uart = busio.UART(tx=board.TX, rx=board.RX, baudrate=115200, bits=8, parity=busio.UART.Parity.ODD, stop=1, timeout=1)
+lidar_responses = [b"\xA5\x5A\x03\x00\x00\x00\x06\x00\x00\x00\xA5\x5A\x14\x00\x00\x00\x04\x18\x1D\x01\x07\xEC\xFD\xED\x95\xC4\xE4\x93\xCD\xA5\xE6\x9E\xF0\x7D\x2D\x4B\x69",
+    b"\xA5\x5A\x14\x00\x00\x00\x04\x18\x1D\x01\x07\xEC\xFD\xED\x95\xC4\xE4\x93\xCD\xA5\xE6\x9E\xF0\x7D\x2D\x4B\x69",
+    b"\xA5\x5A\x08\x00\x00\x00\x20\x71\x00\x00\x00\x00\x7F\x00\x00",
+    b"\xA5\x5A\x08\x00\x00\x00\x20\x74\x00\x00\x00\x00\x0C\x00\x00",
+    b"\xA5\x5A\x05\x00\x00\x00\x20\x75\x00\x00\x00\x84",
+    b"\xA5\x5A\x0A\x00\x00\x00\x20\x7F\x00\x00\x00\x42\x6F\x6F\x73\x74\x00",
+    b"\xA5\x5A\x0F\x00\x00\x00\x14\x00\x00\x61\x00\x00\x00\xA0\x00\x00\x0C\x00\x04\x00\x28\x1D",
+    b"\xA5\x82\x05\x02\x00\x00\x00\x00\x20",
+    b"\xA5\x5A\x84\x00\x00\x40\x84"]
 
-def process_data(data):
-    print(data)
+uart = busio.UART(
+    tx=board.GP8,
+    rx=board.GP9,
+    baudrate=115200,
+    bits=8,
+    parity=busio.UART.Parity.ODD,
+    stop=1,
+    timeout=.001)
 
+def prettyprint_bytes(bs, label=""):
+    print(label, sep="", end="")
+    for c in bs:
+        print("{:02x} ".format(c), end="")
+    print("")
 
-# Setup the RPLidar
-lidar = RPLidar(motor_control, uart, 115200, 300,logging=True)
-for k,v in lidar.info():
-    print(k,v)
-scan_data = [0] * 360
+def wait_for_response(uart, expected_response):
+    ctr = 0
+    data = b""
+    while True:
+        data = uart.read(len(expected_response))
+        if data != None:
+            # assert(expected_response == data)
+            prettyprint_bytes(data, label="RX: ")
+            break
 
-# try:
-    #    )
-#     for scan in lidar.iter_scans():
-#         for _, angle, distance in scan:
-#             scan_data[min([359, floor(angle)])] = distance
-#         process_data(scan_data)
-#
-# except KeyboardInterrupt:
-#     print("Stopping.")
-lidar.stop()
-lidar.disconnect()
+for idx, cmd in enumerate(usb_cmds):
+    uart.write(cmd)
+    prettyprint_bytes(cmd, label="TX: ")
+    wait_for_response(uart, lidar_responses[idx])
