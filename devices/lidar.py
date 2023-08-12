@@ -21,8 +21,8 @@ lidar_responses = [b"\xA5\x5A\x03\x00\x00\x00\x06\x00\x00\x00\xA5\x5A\x14\x00\x0
     b"\xA5\x5A\x84\x00\x00\x40\x84"]
 
 uart = busio.UART(
-    tx=board.GP8,
-    rx=board.GP9,
+    tx=board.TX,
+    rx=board.RX,
     baudrate=115200,
     bits=8,
     parity=busio.UART.Parity.ODD,

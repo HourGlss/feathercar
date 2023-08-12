@@ -30,7 +30,6 @@ The Current Version does NOT support CircuitPython. Future versions will.
 import struct
 import sys
 import time
-#import warnings
 from collections import namedtuple
 
 try:
@@ -39,7 +38,7 @@ try:
     from digitalio import DigitalInOut
 except ImportError:
     pass
-import busio
+
 # pylint:disable=invalid-name,undefined-variable,global-variable-not-assigned
 # pylint:disable=too-many-arguments,raise-missing-from,too-many-instance-attributes
 
@@ -47,7 +46,7 @@ __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_RPLIDAR.git"
 
 SYNC_BYTE = b"\xA5"
-SYNC_BYTE2 = b"\xAD"
+SYNC_BYTE2 = b"\x5A"
 
 GET_INFO_BYTE = b"\x50"
 GET_HEALTH_BYTE = b"\x52"
@@ -167,7 +166,7 @@ class RPLidar:
         self.is_CP = not isinstance(port, str)
 
         if self.is_CP:
-           self._serial_port = port
+            self._serial_port = port
         else:
             global serial  # pylint: disable=global-statement
             import serial  # pylint: disable=import-outside-toplevel
@@ -182,8 +181,11 @@ class RPLidar:
 
     def log_bytes(self, level: str, msg: str, ba: bytes) -> None:
         """Log and output a byte array in a readable way."""
-        bs = ["%02x".upper() % b for b in ba]
-        self.log(level, msg + " ".join(bs))
+        if ba is not None:
+            bs = ["%02x" % b for b in ba]
+            self.log(level, msg + " ".join(bs))
+        elif ba is None:
+            self.log(level, f"{msg} received None bytes")
 
     def connect(self) -> None:
         """Connects to the serial port named by the port instance var. If it was
@@ -208,10 +210,7 @@ class RPLidar:
         """Disconnects from the serial port"""
         if self._serial_port is None:
             return
-        if not isinstance(self._serial_port,busio.UART):
-            self._serial_port.close()
-        elif isinstance(self._serial_port,busio.UART):
-            self._serial_port.deinit()
+        self._serial_port.close()
 
     def set_pwm(self, pwm: int) -> None:
         """Set the motor PWM"""
@@ -267,21 +266,23 @@ class RPLidar:
         """Reads descriptor packet"""
         descriptor = self._serial_port.read(DESCRIPTOR_LEN)
         self.log_bytes("debug", "Received descriptor:", descriptor)
-        if len(descriptor) != DESCRIPTOR_LEN:
-            raise RPLidarException("Descriptor length mismatch")
-        if not descriptor.startswith(SYNC_BYTE + SYNC_BYTE2):
-            raise RPLidarException("Incorrect descriptor starting bytes")
-        is_single = descriptor[-2] == 0
-        return descriptor[2], is_single, descriptor[-1]
+        if descriptor is not None:
+            if len(descriptor) != DESCRIPTOR_LEN:
+                raise RPLidarException("Descriptor length mismatch")
+            if not descriptor.startswith(SYNC_BYTE + SYNC_BYTE2):
+                raise RPLidarException("Incorrect descriptor starting bytes")
+            is_single = descriptor[-2] == 0
+            return descriptor[2], is_single, descriptor[-1]
 
     def _read_response(self, dsize: int) -> bytes:
         """Reads response packet with length of `dsize` bytes"""
         self.log("debug", "Trying to read response: %d bytes" % dsize)
         data = self._serial_port.read(dsize)
         self.log_bytes("debug", "Received data:", data)
-        if len(data) != dsize:
-            raise RPLidarException("Wrong body size")
-        return data
+        if data is not None:
+            if len(data) != dsize:
+                raise RPLidarException("Wrong body size")
+            return data
 
     @property
     def info(self) -> Dict[str, Any]:
@@ -294,14 +295,13 @@ class RPLidar:
         """
         self._send_cmd(GET_INFO_BYTE)
         dsize, is_single, dtype = self._read_descriptor()
-        # print(dsize,is_single,dtype)
-        # if dsize != INFO_LEN:
-        #     raise RPLidarException("Wrong info reply length")
+        if dsize != INFO_LEN:
+            raise RPLidarException("Wrong info reply length")
         if not is_single:
             raise RPLidarException("Not a single response mode")
         if dtype != INFO_TYPE:
             raise RPLidarException("Wrong response data type")
-        raw = self._read_response(20)
+        raw = self._read_response(dsize)
         serialnumber_bytes = struct.unpack("B" * len(raw[4:]), raw[4:])
         serialnumber = "".join(reversed(["%02x" % b for b in serialnumber_bytes]))
         data = {
@@ -345,8 +345,7 @@ class RPLidar:
         """Clears input buffer by reading all available data"""
         if self.scanning:
             raise RPLidarException("Clearing not allowed during active scanning!")
-        if not isinstance(self._serial_port,busio.UART):
-            self._serial_port.flushInput()
+        self._serial_port.flushInput()
         self.express_frame = 32
         self.express_data = False
 
@@ -363,7 +362,6 @@ class RPLidar:
         # Start the scanning process, enable laser diode and the
         # measurement system
         status, error_code = self.health
-        print("Health status: %s [%d]" % (status, error_code))
         self.log("debug", "Health status: %s [%d]" % (status, error_code))
         if status == _HEALTH_STATUSES[2]:
             self.log(
