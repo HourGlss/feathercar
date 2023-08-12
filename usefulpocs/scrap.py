@@ -1,40 +1,30 @@
-class Foo:
-    gain: int
+import digitalio
+import board
+import busio
+import adafruit_mcp2515
 
-    def __init__(self):
-        self.gain = 5
+cs = digitalio.DigitalInOut(board.CAN_CS)
+cs.switch_to_output()
+spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
+matches = [
+            adafruit_mcp2515.Match(0x060, mask = 0x7F0)
+        ]
+# for me, the first 3 bits correspond to priority
+# the next 4 bits are used for the device number
+# the last 4 correspond to the message type.
+# each device except the central controller can then only need to listen to a subset of matches that correspond to it's
+# device number
 
-    def adjust_gain_lower(self):
-        if self.gain > 0:
-            self.gain -= 1
-            return True
-        return False
-
-    def adjust_gain_higher(self):
-        if self.gain < 7:
-            self.gain += 1
-            return True
-        return False
-
-    def set_gain(self, chosen_gain) -> bool:
-        if 0 <= chosen_gain <= 7:
-            self.gain = chosen_gain
-            return True
-        return False
-
-    def _create_gain_register_info(self):
-        return self.gain << 5
-
-    def _get_low_high_self_test(self):
-        gain_config = [1370, 1090, 820, 660, 440, 390, 330, 230]
-        low = 243
-        high = 575
-        return int(low * (gain_config[self.gain] / 390)), int(high * (gain_config[self.gain] / 390))
-
-
-if __name__ == "__main__":
-    f = Foo()
-    for i in range(0, 8):
-        f.set_gain(i)
-        l,h = f.get_min_max()
-        print(f"{f.gain} {l} {h}")
+mcp = adafruit_mcp2515.MCP2515(spi, cs, baudrate=1000000)
+received_messages = []
+while True:
+    # If there's a better way to specify mask, let me know.
+    with mcp.listen(matches, timeout=.00001) as listener:
+        next_message = listener.receive()
+        while next_message is not None:
+            received_messages.append(next_message)
+            print("adding message")
+            next_message = listener.receive()
+     # just to prove the point
+    while len(received_messages) > 0:
+        received_messages.pop()

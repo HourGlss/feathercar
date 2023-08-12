@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import socket
-from can_info.canbus import CANBus
+from can_examples.canbus import CANBus
 from enum import Enum
 
 try:

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from adafruit_mcp2515 import MCP2515 as CAN
+
 import board
 import digitalio
 import busio
@@ -14,7 +14,7 @@ except:
 
 
 class CANBus:
-    mcp: None | CAN
+    mcp: adafruit_mcp2515.MCP2515
     next_message_to_send: None | CanMessage
     received_messages: list
 
@@ -29,7 +29,10 @@ class CANBus:
         cs.switch_to_output()
         spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
         self.mcp = None
-        self.mcp = CAN(spi, cs, baudrate=1000000)
+        try:
+            self.mcp = adafruit_mcp2515.MCP2515(spi, cs, baudrate=1000000)
+        except:
+            pass
         assert self.mcp is not None
 
     def create_message(self, message_number, **kwargs):
