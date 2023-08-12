@@ -506,17 +506,6 @@ class RPLidar:
                     self.express_frame,
                 )
 
-    def iter_measurments(
-        self, max_buf_meas: int = 500
-    ) -> Iterator[Tuple[bool, int, float, float]]:
-        """For compatibility, this method wraps `iter_measurements`"""
-        warnings.warn(
-            "The method `iter_measurments` has been renamed "
-            "`iter_measurements` to correct spelling",
-            PendingDeprecationWarning,
-        )
-        self.iter_measurements(max_buf_meas=max_buf_meas)
-
     def iter_scans(
         self, max_buf_meas: int = 500, min_len: int = 5
     ) -> List[Union[int, float]]:

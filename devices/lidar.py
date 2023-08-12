@@ -15,9 +15,6 @@ motor_control.direction = Direction.OUTPUT
 # Set up UART
 uart = busio.UART(tx=board.TX, rx=board.RX, baudrate=115200, bits=8, parity=busio.UART.Parity.ODD, stop=1, timeout=1)
 
-def process_data(data):
-    print(data)
-
 
 # Setup the RPLidar
 lidar = RPLidar(motor_control, uart, 115200, 300,logging=True)
