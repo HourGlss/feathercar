@@ -479,7 +479,6 @@ class RPLidar:
             In millimeter unit. Set to 0 when measurement is invalid.
         """
         self.log("debug", "iter_measurements")
-
         self.start_motor()
         if not self.scanning:
             self.start(scan_type)
