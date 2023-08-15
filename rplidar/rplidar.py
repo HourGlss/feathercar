@@ -30,7 +30,6 @@ The Current Version does NOT support CircuitPython. Future versions will.
 import struct
 import sys
 import time
-#import warnings
 from collections import namedtuple
 
 try:
@@ -39,7 +38,7 @@ try:
     from digitalio import DigitalInOut
 except ImportError:
     pass
-import busio
+
 # pylint:disable=invalid-name,undefined-variable,global-variable-not-assigned
 # pylint:disable=too-many-arguments,raise-missing-from,too-many-instance-attributes
 
@@ -47,7 +46,7 @@ __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_RPLIDAR.git"
 
 SYNC_BYTE = b"\xA5"
-SYNC_BYTE2 = b"\xAD"
+SYNC_BYTE2 = b"\x5A"
 
 GET_INFO_BYTE = b"\x50"
 GET_HEALTH_BYTE = b"\x52"
@@ -90,30 +89,36 @@ class RPLidarException(Exception):
     """Basic exception class for RPLidar"""
 
 
-def _process_scan(raw: bytes) -> Tuple[bool, int, float, float]:
+def _process_scan(raw: bytes) -> Tuple[bool, int, float, float] | None:
     """Processes input raw data and returns measurement data"""
+    data_bad = False
     new_scan = bool(raw[0] & 0b1)
     inversed_new_scan = bool((raw[0] >> 1) & 0b1)
     quality = raw[0] >> 2
     if new_scan == inversed_new_scan:
-        raise RPLidarException("New scan flags mismatch")
+        data_bad = True
+        # raise RPLidarException("New scan flags mismatch")
     check_bit = raw[1] & 0b1
     if check_bit != 1:
-        raise RPLidarException("Check bit not equal to 1")
-    angle = ((raw[1] >> 1) + (raw[2] << 7)) / 64.0
-    distance = (raw[3] + (raw[4] << 8)) / 4.0
-    return new_scan, quality, angle, distance
+        data_bad = True
+        # raise RPLidarException("Check bit not equal to 1")
+    if not data_bad:
+        angle = ((raw[1] >> 1) + (raw[2] << 7)) / 64.0
+        distance = (raw[3] + (raw[4] << 8)) / 4.0
+        return new_scan, quality, angle, distance
+    else:
+        return None
 
 
 def _process_express_scan(
-    data: "ExpressPacket", new_angle: float, frame: int
+        data: "ExpressPacket", new_angle: float, frame: int
 ) -> Tuple[bool, None, float, float]:
     new_scan = (new_angle < data.start_angle) & (frame == 1)
     angle = (
-        data.start_angle
-        + ((new_angle - data.start_angle) % 360) / 32 * frame
-        - data.angle[frame - 1]
-    ) % 360
+                    data.start_angle
+                    + ((new_angle - data.start_angle) % 360) / 32 * frame
+                    - data.angle[frame - 1]
+            ) % 360
     distance = data.distance[frame - 1]
     return new_scan, None, angle, distance
 
@@ -135,12 +140,12 @@ class RPLidar:
     express_old_data = None
 
     def __init__(
-        self,
-        motor_pin: DigitalInOut,
-        port: UART,
-        baudrate: int = 115200,
-        timeout: float = 1,
-        logging: bool = False,
+            self,
+            motor_pin: DigitalInOut,
+            port: UART,
+            baudrate: int = 115200,
+            timeout: float = 1,
+            logging: bool = False,
     ) -> None:
         """Initialize RPLidar object for communicating with the sensor.
 
@@ -167,7 +172,7 @@ class RPLidar:
         self.is_CP = not isinstance(port, str)
 
         if self.is_CP:
-           self._serial_port = port
+            self._serial_port = port
         else:
             global serial  # pylint: disable=global-statement
             import serial  # pylint: disable=import-outside-toplevel
@@ -182,10 +187,15 @@ class RPLidar:
 
     def log_bytes(self, level: str, msg: str, ba: bytes) -> None:
         """Log and output a byte array in a readable way."""
-        bs = ["%02x".upper() % b for b in ba]
-        self.log(level, msg + " ".join(bs))
+        if ba is not None:
+            bs = ["%02x" % b for b in ba]
+            self.log(level, msg + " ".join(bs))
+        elif ba is None:
+            self.log(level, f"{msg}")
 
     def connect(self) -> None:
+        self.log("debug", "connect")
+
         """Connects to the serial port named by the port instance var. If it was
         connected to another serial port disconnects from it first."""
         if not self.is_CP:
@@ -205,21 +215,25 @@ class RPLidar:
                 )
 
     def disconnect(self) -> None:
+        self.log("debug", "disconnect")
+
         """Disconnects from the serial port"""
         if self._serial_port is None:
             return
-        if not isinstance(self._serial_port,busio.UART):
+        if not self.is_CP:
             self._serial_port.close()
-        elif isinstance(self._serial_port,busio.UART):
-            self._serial_port.deinit()
 
     def set_pwm(self, pwm: int) -> None:
+        self.log("debug", "set_pwm")
+
         """Set the motor PWM"""
         assert 0 <= pwm <= MAX_MOTOR_PWM
         payload = struct.pack("<H", pwm)
         self._send_payload_cmd(SET_PWM_BYTE, payload)
 
     def _control_motor(self, val: bool) -> None:
+        self.log("debug", "_control_motor")
+
         """Manipulate the motor"""
         if self.is_CP:
             self.motor_pin.value = val
@@ -237,6 +251,7 @@ class RPLidar:
         self.motor_running = True
 
     def stop_motor(self) -> None:
+        self.log("debug", "stop_motor")
         """Stops sensor motor"""
         self.log("info", "Stopping motor")
         # For A2
@@ -263,9 +278,13 @@ class RPLidar:
         self._serial_port.write(req)
         self.log_bytes("debug", "Command sent: ", req)
 
-    def _read_descriptor(self) -> Tuple[int, bool, int]:
+    def _read_descriptor(self) -> Tuple[int, bool, int] | None:
         """Reads descriptor packet"""
+        self.log("debug", "_read_descriptor")
+
         descriptor = self._serial_port.read(DESCRIPTOR_LEN)
+        if descriptor is None:
+            return None
         self.log_bytes("debug", "Received descriptor:", descriptor)
         if len(descriptor) != DESCRIPTOR_LEN:
             raise RPLidarException("Descriptor length mismatch")
@@ -274,17 +293,19 @@ class RPLidar:
         is_single = descriptor[-2] == 0
         return descriptor[2], is_single, descriptor[-1]
 
-    def _read_response(self, dsize: int) -> bytes:
+    def _read_response(self, dsize: int) -> bytes | None:
         """Reads response packet with length of `dsize` bytes"""
-        self.log("debug", "Trying to read response: %d bytes" % dsize)
+        self.log("debug", "_read_response: %d bytes" % dsize)
         data = self._serial_port.read(dsize)
-        self.log_bytes("debug", "Received data:", data)
-        if len(data) != dsize:
-            raise RPLidarException("Wrong body size")
-        return data
+        if data is not None:
+            self.log_bytes("debug", "Received data:", data)
+            if len(data) != dsize:
+                raise RPLidarException("Wrong body size")
+            return data
+        return None
 
     @property
-    def info(self) -> Dict[str, Any]:
+    def info(self) -> Dict[str, Any] | None:
         """Get device information
 
         Returns
@@ -293,24 +314,27 @@ class RPLidar:
             Dictionary with the sensor information
         """
         self._send_cmd(GET_INFO_BYTE)
-        dsize, is_single, dtype = self._read_descriptor()
-        # print(dsize,is_single,dtype)
-        # if dsize != INFO_LEN:
-        #     raise RPLidarException("Wrong info reply length")
-        if not is_single:
-            raise RPLidarException("Not a single response mode")
-        if dtype != INFO_TYPE:
-            raise RPLidarException("Wrong response data type")
-        raw = self._read_response(20)
-        serialnumber_bytes = struct.unpack("B" * len(raw[4:]), raw[4:])
-        serialnumber = "".join(reversed(["%02x" % b for b in serialnumber_bytes]))
-        data = {
-            "model": raw[0],
-            "firmware": (raw[2], raw[1]),
-            "hardware": raw[3],
-            "serialnumber": serialnumber,
-        }
-        return data
+        descriptor = self._read_descriptor()
+        if descriptor is not None:
+            dsize, is_single, dtype = descriptor
+            if dsize != INFO_LEN:
+                raise RPLidarException("Wrong info reply length")
+            if not is_single:
+                raise RPLidarException("Not a single response mode")
+            if dtype != INFO_TYPE:
+                raise RPLidarException("Wrong response data type")
+            raw = self._read_response(dsize)
+            serialnumber_bytes = struct.unpack("B" * len(raw[4:]), raw[4:])
+            serialnumber = "".join(reversed(["%02x" % b for b in serialnumber_bytes]))
+            data = {
+                "model": raw[0],
+                "firmware": (raw[2], raw[1]),
+                "hardware": raw[3],
+                "serialnumber": serialnumber,
+            }
+            return data
+        elif descriptor is None:
+            return self.info
 
     @property
     def health(self) -> Tuple[str, int]:
@@ -329,28 +353,36 @@ class RPLidar:
             The related error code that caused a warning/error.
         """
         self._send_cmd(GET_HEALTH_BYTE)
-        dsize, is_single, dtype = self._read_descriptor()
-        if dsize != HEALTH_LEN:
-            raise RPLidarException("Wrong info reply length")
-        if not is_single:
-            raise RPLidarException("Not a single response mode")
-        if dtype != HEALTH_TYPE:
-            raise RPLidarException("Wrong response data type")
-        raw = self._read_response(dsize)
-        status = _HEALTH_STATUSES[raw[0]]
-        error_code = (raw[1] << 8) + raw[2]
-        return (status, error_code)
+        descriptor = self._read_descriptor()
+        if descriptor is not None:
+            dsize, is_single, dtype = descriptor
+            if dsize != HEALTH_LEN:
+                raise RPLidarException("Wrong info reply length")
+            if not is_single:
+                raise RPLidarException("Not a single response mode")
+            if dtype != HEALTH_TYPE:
+                raise RPLidarException("Wrong response data type")
+            raw = self._read_response(dsize)
+            status = _HEALTH_STATUSES[raw[0]]
+            error_code = (raw[1] << 8) + raw[2]
+            return status, error_code
+        else:
+            return self.health
 
     def clear_input(self) -> None:
+        self.log("debug", "clear_input")
+
         """Clears input buffer by reading all available data"""
         if self.scanning:
             raise RPLidarException("Clearing not allowed during active scanning!")
-        if not isinstance(self._serial_port,busio.UART):
+        if not self.is_CP:
             self._serial_port.flushInput()
         self.express_frame = 32
         self.express_data = False
 
     def start(self, scan_type: int = SCAN_TYPE_NORMAL) -> None:
+        self.log("debug", "start")
+
         """Start the scanning process
 
         Parameters
@@ -363,7 +395,6 @@ class RPLidar:
         # Start the scanning process, enable laser diode and the
         # measurement system
         status, error_code = self.health
-        print("Health status: %s [%d]" % (status, error_code))
         self.log("debug", "Health status: %s [%d]" % (status, error_code))
         if status == _HEALTH_STATUSES[2]:
             self.log(
@@ -419,8 +450,9 @@ class RPLidar:
         self.clear_input()
 
     def iter_measurements(
-        self, max_buf_meas: int = 500, scan_type: int = SCAN_TYPE_NORMAL
+            self, max_buf_meas: int = 500, scan_type: int = SCAN_TYPE_NORMAL
     ) -> Iterator[Tuple[bool, Optional[int], float, float]]:
+        self.log("debug", "iter_measurements")
         """Iterate over measurements. Note that consumer must be fast enough,
         otherwise data will be accumulated inside buffer and consumer will get
         data with increasing lag.
@@ -446,6 +478,8 @@ class RPLidar:
             Measured object distance related to the sensor's rotation center.
             In millimeter unit. Set to 0 when measurement is invalid.
         """
+        self.log("debug", "iter_measurements")
+
         self.start_motor()
         if not self.scanning:
             self.start(scan_type)
@@ -464,7 +498,8 @@ class RPLidar:
             if self.scan_type == SCAN_TYPE_NORMAL:
                 raw = self._read_response(dsize)
                 self.log_bytes("debug", "Received scan response: ", raw)
-                yield _process_scan(raw)
+                if raw is not None:
+                    yield _process_scan(raw)
             elif self.scan_type == SCAN_TYPE_EXPRESS:
                 if self.express_frame == 32:
                     self.express_frame = 0
@@ -506,20 +541,11 @@ class RPLidar:
                     self.express_frame,
                 )
 
-    def iter_measurments(
-        self, max_buf_meas: int = 500
-    ) -> Iterator[Tuple[bool, int, float, float]]:
-        """For compatibility, this method wraps `iter_measurements`"""
-        warnings.warn(
-            "The method `iter_measurments` has been renamed "
-            "`iter_measurements` to correct spelling",
-            PendingDeprecationWarning,
-        )
-        self.iter_measurements(max_buf_meas=max_buf_meas)
-
     def iter_scans(
-        self, max_buf_meas: int = 500, min_len: int = 5
-    ) -> List[Union[int, float]]:
+            self, max_buf_meas: int = 500, min_len: int = 5
+    ) -> List[Union[int, float]] | None:
+        self.log("debug", "iter_scans")
+
         """Iterate over scans. Note that consumer must be fast enough,
         otherwise data will be accumulated inside buffer and consumer will get
         data with increasing lag.
@@ -543,13 +569,16 @@ class RPLidar:
         """
         scan = []
         iterator = self.iter_measurements(max_buf_meas)
-        for new_scan, quality, angle, distance in iterator:
-            if new_scan:
-                if len(scan) > min_len:
-                    yield scan
-                scan = []
-            if quality > 0 and distance > 0:
-                scan.append((quality, angle, distance))
+        try:
+            for new_scan, quality, angle, distance in iterator:
+                if new_scan:
+                    if len(scan) > min_len:
+                        yield scan
+                    scan = []
+                if quality > 0 and distance > 0:
+                    scan.append((quality, angle, distance))
+        except TypeError:
+            pass
 
 
 class ExpressPacket(express_packet):

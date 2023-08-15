@@ -1,30 +1,40 @@
-import digitalio
+# SPDX-FileCopyrightText: 2021 ladyada for Adafruit Industries
+#
+# SPDX-License-Identifier: MIT
 import board
+import time
+import digitalio
 import busio
-import adafruit_mcp2515
+from math import floor
+from zxc import RPLidar
 
-cs = digitalio.DigitalInOut(board.CAN_CS)
-cs.switch_to_output()
-spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-matches = [
-            adafruit_mcp2515.Match(0x060, mask = 0x7F0)
-        ]
-# for me, the first 3 bits correspond to priority
-# the next 4 bits are used for the device number
-# the last 4 correspond to the message type.
-# each device except the central controller can then only need to listen to a subset of matches that correspond to it's
-# device number
+# Setup the RPLidar
+uart = busio.UART(
+    tx=board.TX,
+    rx=board.RX,
+    baudrate=115200)
+motor_control = digitalio.DigitalInOut(board.D4)
+motor_control.switch_to_output()
+lidar = RPLidar(motor_control, uart, timeout=3)
 
-mcp = adafruit_mcp2515.MCP2515(spi, cs, baudrate=1000000)
-received_messages = []
-while True:
-    # If there's a better way to specify mask, let me know.
-    with mcp.listen(matches, timeout=.00001) as listener:
-        next_message = listener.receive()
-        while next_message is not None:
-            received_messages.append(next_message)
-            print("adding message")
-            next_message = listener.receive()
-     # just to prove the point
-    while len(received_messages) > 0:
-        received_messages.pop()
+# used to scale data to fit on the screen
+max_distance = 0
+
+
+def process_data(data):
+    print(data)
+
+
+scan_data = [0] * 360
+
+try:
+    print(lidar.info)
+    for scan in lidar.iter_scans():
+        for _, angle, distance in scan:
+            scan_data[min([359, floor(angle)])] = distance
+        print(scan_data)
+
+except KeyboardInterrupt:
+    print("Stopping.")
+lidar.stop()
+lidar.disconnect()
